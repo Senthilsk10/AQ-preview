@@ -181,6 +181,17 @@
                                 text-align: center;
                             }
                             
+                            /* Chart.js styling */
+                            .chartjs-container {
+                                margin: 10px 0;
+                                text-align: center;
+                            }
+                            
+                            .chartjs-container canvas {
+                                max-width: 400px;
+                                max-height: 300px;
+                            }
+                            
                             pre {
                                 background-color: #f5f5f5;
                                 padding: 10px;
@@ -220,7 +231,14 @@
                 mermaidScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
                 mermaidScript.onload = function () {
                     previewWindow.mermaid.initialize({ startOnLoad: false });
-                    renderContent();
+                    
+                    // Load Chart.js after Mermaid
+                    const chartjsScript = previewWindow.document.createElement('script');
+                    chartjsScript.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
+                    chartjsScript.onload = function() {
+                        renderContent();
+                    };
+                    previewWindow.document.head.appendChild(chartjsScript);
                 };
                 previewWindow.document.head.appendChild(mermaidScript);
             };
@@ -261,6 +279,29 @@
                                 previewWindow.mermaid.run({ nodes: [mermaidDiv] });
                             } catch (err) {
                                 console.error('Mermaid rendering error:', err);
+                            }
+                        } else if (preContent.className.includes('chartjs')) {
+                            // Handle Chart.js content
+                            const chartContainer = previewWindow.document.createElement('div');
+                            chartContainer.className = 'chartjs-container';
+                            
+                            try {
+                                console.log(preContent.textContent);
+                                const config = JSON.parse(preContent.textContent);
+                                // Add responsive defaults if not specified
+                                if (!config.options) config.options = {};
+                                if (!config.options.responsive) config.options.responsive = true;
+                                if (!config.options.maintainAspectRatio) config.options.maintainAspectRatio = false;
+                                
+                                const canvas = previewWindow.document.createElement('canvas');
+                                chartContainer.appendChild(canvas);
+                                questionPreDiv.appendChild(chartContainer);
+                                
+                                new previewWindow.Chart(canvas.getContext('2d'), config);
+                            } catch (err) {
+                                console.error('Chart.js rendering error:', err);
+                                chartContainer.innerHTML = '<p style="color: red;">Error rendering chart: ' + err.message + '</p>';
+                                questionPreDiv.appendChild(chartContainer);
                             }
                         } else {
                             // For other pre tags, insert as-is
@@ -318,6 +359,29 @@
                                     previewWindow.mermaid.run({ nodes: [mermaidDiv] });
                                 } catch (err) {
                                     console.error('Mermaid rendering error:', err);
+                                }
+                            } else if (preContent.className.includes('chartjs')) {
+                                // Handle Chart.js content in options
+                                const chartContainer = previewWindow.document.createElement('div');
+                                chartContainer.className = 'chartjs-container';
+                                
+                                try {
+                                    const config = JSON.parse(preContent.textContent);
+                                    
+                                    // Add responsive defaults if not specified
+                                    if (!config.options) config.options = {};
+                                    if (!config.options.responsive) config.options.responsive = true;
+                                    if (!config.options.maintainAspectRatio) config.options.maintainAspectRatio = false;
+                                    
+                                    const canvas = previewWindow.document.createElement('canvas');
+                                    chartContainer.appendChild(canvas);
+                                    contentDiv.appendChild(chartContainer);
+                                    
+                                    new previewWindow.Chart(canvas.getContext('2d'), config);
+                                } catch (err) {
+                                    console.error('Chart.js rendering error:', err);
+                                    chartContainer.innerHTML = '<p style="color: red;">Error rendering chart: ' + err.message + '</p>';
+                                    contentDiv.appendChild(chartContainer);
                                 }
                             } else {
                                 // For other pre tags, insert as-is

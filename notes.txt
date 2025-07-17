@@ -1,0 +1,70 @@
+Ah, I see! You're trying to **embed Mermaid diagram syntax in a Python string**—likely inside an HTML template like your KaTeX example—and it's not rendering properly when you open the HTML file.
+
+Let’s fix that.
+
+---
+
+### ✅ Minimal Working Mermaid-in-HTML Python Example
+
+Here’s how you can **embed Mermaid syntax in a raw `<pre class="mermaid">...</pre>` block** inside a Python triple-quoted string:
+
+```python
+def generate_mermaid_html(diagram: str) -> str:
+    """Generate full HTML with Mermaid diagram support."""
+    return f'''<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='UTF-8'>
+  <script src='https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js'></script>
+</head>
+<body>
+  <pre class="mermaid">
+{diagram}
+  </pre>
+  <script>
+    mermaid.initialize({{ startOnLoad: true }});
+  </script>
+</body>
+</html>'''
+```
+
+---
+
+### ✅ Sample Call
+
+```python
+diagram = """erDiagram
+    CAR ||--o{ NAMED-DRIVER : allows
+    PERSON ||--o{ NAMED-DRIVER : is
+"""
+
+html = generate_mermaid_html(diagram)
+with open("mermaid_preview.html", "w") as f:
+    f.write(html)
+```
+
+---
+
+### ✅ Output Notes
+
+1. **Use triple quotes** for the Mermaid string to preserve line breaks.
+2. Avoid `\n` or manual escaping inside the Mermaid syntax.
+3. The **diagram must not be wrapped inside backticks or code fences** (i.e., don't use ` ```mermaid `).
+4. Use `class="mermaid"` on a `<pre>` or `<div>`.
+
+---
+
+### 🛠 If it's still not working:
+
+Make sure:
+
+* You're opening the file in a real browser (not inside VS Code's preview tab).
+* You don't use KaTeX backticks (`` `...` ``) or Markdown-style code blocks.
+
+---
+
+### ✅ Optional: Combine with KaTeX
+
+If you want **both KaTeX and Mermaid** in the same page, I can provide a combined HTML generator as well.
+
+Let me know if that’s what you're building.

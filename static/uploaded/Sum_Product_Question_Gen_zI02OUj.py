@@ -6,6 +6,7 @@ import numpy as np
 import re
 import sys
 import json
+import html
 
 class DoubleOperationGenerator:
     def __init__(self):
@@ -1333,6 +1334,22 @@ def generate_single_katex_html(math_expression: str, is_question: bool = False, 
     CAR ||--o{ NAMED-DRIVER : allows
     PERSON ||--o{ NAMED-DRIVER : is
     """
+    chartjs_code = {
+        "type": "bar",
+        "data": {
+            "labels": ["Jan", "Feb", "Mar", "Apr"],
+            "datasets": [
+            {
+                "label": "Sales",
+                "data": [65, 59, 80, 81],
+                "backgroundColor": "#FF6384"
+            }
+            ]
+        }
+    }
+
+    chartjs_json = json.dumps(chartjs_code)
+    chartjs_json_escaped = html.escape(chartjs_json)
     
     katex_script = (
         f"<div id='math-output'></div>"
@@ -1340,13 +1357,14 @@ def generate_single_katex_html(math_expression: str, is_question: bool = False, 
     )
 
     mermaid_block = f"<pre class='mermaid'>{mermaid_code}</pre>" if mermaid_code and is_question else ''
+    chartjs_block = f"<pre class='chartjs'>{chartjs_json_escaped}</pre>" if chartjs_code and is_question else ''
 
     return (
         "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
         "<link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'>"
         "<script src='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'></script>"
         "</head><body>"
-        f"{instruction}{mermaid_block}{katex_script}"
+        f"{instruction}{mermaid_block}{chartjs_block}{katex_script}"
         "</body></html>"
     )
 
