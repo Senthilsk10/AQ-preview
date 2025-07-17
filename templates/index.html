@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auto Question Uploader</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        label, select, input, button { display: block; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>Upload Python File</h2>
+
+    <input type="file" id="codeFile">
+    <label>Question Type</label>
+    <input type="number" id="question_type" value="1">
+
+    <label>Question Level</label>
+    <input type="number" id="question_level" value="1">
+
+    <button onclick="uploadAndPreview()">Upload & Preview</button>
+
+    <script>
+    // Function to extract content from HTML string
+    function extractContentFromHtml(htmlString) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlString, 'text/html');
+        
+        // Extract pre tags before removing scripts
+        const preTags = doc.querySelectorAll('pre');
+        const preContents = Array.from(preTags).map(pre => ({
+            className: pre.className,
+            textContent: pre.textContent || pre.innerText || '',
+            outerHTML: pre.outerHTML
+        }));
+        
+        // Remove script tags to get clean text content
+        const scripts = doc.querySelectorAll('script');
+        scripts.forEach(script => script.remove());
+        
+        // Get text content from body (excluding scripts and pre tags for text extraction)
+        const tempDoc = doc.cloneNode(true);
+        const tempPreTags = tempDoc.querySelectorAll('pre');
+        tempPreTags.forEach(pre => pre.remove());
+        
+        const textContent = tempDoc.body.textContent || tempDoc.body.innerText || '';
+        
+        // Extract LaTeX from katex.render calls
+        const latexMatches = htmlString.match(/katex\.render\(`([^`]+)`/g);
+        const latexExpressions = latexMatches ? latexMatches.map(match => 
+            match.replace(/katex\.render\(`([^`]+)`.*/, '$1')
+        ) : [];
+        
+        return { 
+            textContent: textContent.trim(), 
+            latexExpressions,
+            preContents
+        };
+    }
+
+    async function uploadAndPreview() {
+        const fileInput = document.getElementById('codeFile');
+        const file = fileInput.files[0];
+        if (!file) return alert('Please choose a Python file.');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const uploadResponse = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const uploadData = await uploadResponse.json();
+            if (uploadData.error) throw new Error(uploadData.error);
+
+            const previewResponse = await fetch('/preview-auto-question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    path: uploadData.path,
+                    question_type: document.getElementById('question_type').value,
+                    question_level: document.getElementById('question_level').value
+                })
+            });
+
+            const data = await previewResponse.json();
+            if (data.error) throw new Error(data.error);
+
+            const previewWindow = window.open('', 'Preview', 'width=800,height=600');
+
+            previewWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>Auto Question Preview</title>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"> 
+                        <style>
+                            body {
+                                font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                color: #333;
+                                margin: 0;
+                                padding: 20px;
+                            }
+                            
+                            .questionHeader {
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                margin-bottom: 20px;
+                                padding: 0 1rem;
+                                border-bottom: 1px solid #e0e0e0;
+                                padding-bottom: 15px;
+                            }
+                            
+                            .questionType {
+                                font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                color: #333;
+                                margin: 0;
+                                font-size: 1.2rem;
+                            }
+                            
+                            .questionContent {
+                                margin-bottom: 20px;
+                                font-size: 1.1rem;
+                                line-height: 1.6;
+                                text-align: left;
+                                padding: 0 1rem;
+                                font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                color: #333;
+                            }
+                            
+                            .optionsContainer {
+                                display: flex;
+                                flex-direction: column;
+                                gap: 12px;
+                                margin-bottom: 20px;
+                                padding: 0 1rem;
+                            }
+                            
+                            .optionLabel {
+                                display: flex;
+                                align-items: flex-start;
+                                padding: 12px 16px;
+                                border: 1px solid #e0e0e0;
+                                border-radius: 6px;
+                                background-color: #ffffff;
+                                transition: all 0.2s ease;
+                            }
+                            
+                            .optionLabel:hover {
+                                border-color: #1859a9;
+                                background-color: #f8f9fa;
+                            }
+                            
+                            .optionContent {
+                                flex: 1;
+                                margin-left: 12px;
+                            }
+                            
+                            .math {
+                                font-size: 1.1em;
+                            }
+                            
+                            /* Reset margins for HTML content */
+                            p, div, span {
+                                margin: 0;
+                                padding: 0;
+                            }
+                            
+                            /* Ensure consistent spacing for lists */
+                            ul, ol {
+                                margin: 0;
+                                padding-left: 20px;
+                            }
+                            
+                            /* Mermaid diagram styling */
+                            .mermaid {
+                                margin: 10px 0;
+                                text-align: center;
+                            }
+                            
+                            pre {
+                                background-color: #f5f5f5;
+                                padding: 10px;
+                                border-radius: 4px;
+                                overflow-x: auto;
+                                margin: 10px 0;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="questionHeader">
+                            <h2 class="questionType">Multiple Choice Question</h2>
+                        </div>
+                        
+                        <div id="question" class="questionContent">
+                            <div id="question-text"></div>
+                            <div id="question-math"></div>
+                            <div id="question-pre"></div>
+                        </div>
+                        
+                        <div id="options" class="optionsContainer"></div>
+                        
+                        <div style="padding: 0 1rem;">
+                            <p><strong>Correct Answer:</strong> ${data.output.correctAnswer + 1}</p>
+                        </div>
+                    </body>
+                    </html>
+                `);
+
+            // Load KaTeX
+            const katexScript = previewWindow.document.createElement('script');
+            katexScript.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+            
+            katexScript.onload = function() {
+                // Load Mermaid after KaTeX
+                const mermaidScript = previewWindow.document.createElement('script');
+                mermaidScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+                mermaidScript.onload = function () {
+                    previewWindow.mermaid.initialize({ startOnLoad: false });
+                    renderContent();
+                };
+                previewWindow.document.head.appendChild(mermaidScript);
+            };
+            
+            function renderContent() {
+                // Extract content from question
+                const questionContent = extractContentFromHtml(data.output.question);
+                
+                // Display question text
+                const questionTextDiv = previewWindow.document.getElementById('question-text');
+                questionTextDiv.innerHTML = questionContent.textContent;
+                
+                // Render question math if exists
+                if (questionContent.latexExpressions.length > 0) {
+                    const questionMathDiv = previewWindow.document.getElementById('question-math');
+                    questionContent.latexExpressions.forEach(latex => {
+                        const mathDiv = previewWindow.document.createElement('div');
+                        mathDiv.style.marginTop = '10px';
+                        questionMathDiv.appendChild(mathDiv);
+                        previewWindow.katex.render(latex, mathDiv, { 
+                            displayMode: true, 
+                            throwOnError: false 
+                        });
+                    });
+                }
+                
+                // Render question pre content if exists
+                if (questionContent.preContents.length > 0) {
+                    const questionPreDiv = previewWindow.document.getElementById('question-pre');
+                    questionContent.preContents.forEach(preContent => {
+                        if (preContent.className.includes('mermaid')) {
+                            const mermaidDiv = previewWindow.document.createElement('div');
+                            mermaidDiv.className = 'mermaid';
+                            mermaidDiv.textContent = preContent.textContent;
+                            questionPreDiv.appendChild(mermaidDiv);
+                            
+                            try {
+                                previewWindow.mermaid.run({ nodes: [mermaidDiv] });
+                            } catch (err) {
+                                console.error('Mermaid rendering error:', err);
+                            }
+                        } else {
+                            // For other pre tags, insert as-is
+                            const preDiv = previewWindow.document.createElement('div');
+                            preDiv.innerHTML = preContent.outerHTML;
+                            questionPreDiv.appendChild(preDiv);
+                        }
+                    });
+                }
+                
+                // Process options
+                const optionsContainer = previewWindow.document.getElementById('options');
+                data.output.options.forEach((option, index) => {
+                    const optionContent = extractContentFromHtml(option);
+                    
+                    const optionDiv = previewWindow.document.createElement('div');
+                    optionDiv.className = 'optionLabel';
+                    
+                    const contentDiv = previewWindow.document.createElement('div');
+                    contentDiv.className = 'optionContent';
+                    
+                    optionDiv.innerHTML = `<strong>${index + 1}.</strong>`;
+                    optionDiv.appendChild(contentDiv);
+                    
+                    // Add text content if exists
+                    if (optionContent.textContent.trim()) {
+                        const textDiv = previewWindow.document.createElement('div');
+                        textDiv.innerHTML = optionContent.textContent;
+                        contentDiv.appendChild(textDiv);
+                    }
+                    
+                    // Add math content if exists
+                    if (optionContent.latexExpressions.length > 0) {
+                        optionContent.latexExpressions.forEach(latex => {
+                            const mathDiv = previewWindow.document.createElement('div');
+                            mathDiv.style.marginTop = '5px';
+                            contentDiv.appendChild(mathDiv);
+                            previewWindow.katex.render(latex, mathDiv, {
+                                displayMode: true,
+                                throwOnError: false
+                            });
+                        });
+                    }
+                    
+                    // Add pre content if exists
+                    if (optionContent.preContents.length > 0) {
+                        optionContent.preContents.forEach(preContent => {
+                            if (preContent.className.includes('mermaid')) {
+                                const mermaidDiv = previewWindow.document.createElement('div');
+                                mermaidDiv.className = 'mermaid';
+                                mermaidDiv.textContent = preContent.textContent;
+                                contentDiv.appendChild(mermaidDiv);
+                                
+                                try {
+                                    previewWindow.mermaid.run({ nodes: [mermaidDiv] });
+                                } catch (err) {
+                                    console.error('Mermaid rendering error:', err);
+                                }
+                            } else {
+                                // For other pre tags, insert as-is
+                                const preDiv = previewWindow.document.createElement('div');
+                                preDiv.innerHTML = preContent.outerHTML;
+                                contentDiv.appendChild(preDiv);
+                            }
+                        });
+                    }
+                    
+                    optionsContainer.appendChild(optionDiv);
+                });
+            }
+
+            previewWindow.document.head.appendChild(katexScript);
+            previewWindow.document.close();
+        } catch (err) {
+            console.error(err);
+            alert('Error: ' + err.message);
+        }
+    }
+    </script>
+</body>
+</html>
