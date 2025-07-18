@@ -6,22 +6,26 @@
     <style>
         body { font-family: sans-serif; padding: 20px; }
         label, select, input, button { display: block; margin-top: 10px; }
+        .loading { opacity: 0.6; pointer-events: none; }
+        .error { color: red; margin-top: 10px; }
+        .success { color: green; margin-top: 10px; }
     </style>
 </head>
 <body>
     <h2>Upload Python File</h2>
 
-    <input type="file" id="codeFile">
+    <input type="file" id="codeFile" accept=".py">
     <label>Question Type</label>
-    <input type="number" id="question_type" value="1">
+    <input type="number" id="question_type" value="1" min="1">
 
     <label>Question Level</label>
-    <input type="number" id="question_level" value="1">
+    <input type="number" id="question_level" value="1" min="1">
 
     <button onclick="uploadAndPreview()">Upload & Preview</button>
+    <div id="status"></div>
 
     <script>
-    // Function to extract content from HTML string
+    // Enhanced function to extract content from HTML string
     function extractContentFromHtml(htmlString) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlString, 'text/html');
@@ -45,23 +49,72 @@
         
         const textContent = tempDoc.body.textContent || tempDoc.body.innerText || '';
         
-        // Extract LaTeX from katex.render calls
-        const latexMatches = htmlString.match(/katex\.render\(`([^`]+)`/g);
-        const latexExpressions = latexMatches ? latexMatches.map(match => 
-            match.replace(/katex\.render\(`([^`]+)`.*/, '$1')
-        ) : [];
+        // Enhanced LaTeX extraction - handle multiple formats
+        const latexMatches = [];
+        
+        // Extract from katex.render calls
+        const katexRenderMatches = htmlString.match(/katex\.render\s*\(\s*[`'"](.*?)[`'"]/g);
+        if (katexRenderMatches) {
+            katexRenderMatches.forEach(match => {
+                const latexMatch = match.match(/katex\.render\s*\(\s*[`'"](.*?)[`'"]/);
+                if (latexMatch) latexMatches.push(latexMatch[1]);
+            });
+        }
+        
+        // Extract from $$ delimiters
+        const displayMathMatches = htmlString.match(/\$\$(.*?)\$\$/g);
+        if (displayMathMatches) {
+            displayMathMatches.forEach(match => {
+                const latex = match.replace(/\$\$(.*?)\$\$/, '$1');
+                latexMatches.push(latex);
+            });
+        }
+        
+        // Extract from \( \) delimiters
+        const inlineMathMatches = htmlString.match(/\\\((.*?)\\\)/g);
+        if (inlineMathMatches) {
+            inlineMathMatches.forEach(match => {
+                const latex = match.replace(/\\\((.*?)\\\)/, '$1');
+                latexMatches.push(latex);
+            });
+        }
         
         return { 
             textContent: textContent.trim(), 
-            latexExpressions,
+            latexExpressions: latexMatches,
             preContents
         };
+    }
+
+    function showStatus(message, type = 'info') {
+        const statusDiv = document.getElementById('status');
+        statusDiv.innerHTML = `<div class="${type}">${message}</div>`;
+        
+        if (type === 'success' || type === 'error') {
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 5000);
+        }
     }
 
     async function uploadAndPreview() {
         const fileInput = document.getElementById('codeFile');
         const file = fileInput.files[0];
-        if (!file) return alert('Please choose a Python file.');
+        
+        if (!file) {
+            showStatus('Please choose a Python file.', 'error');
+            return;
+        }
+
+        if (!file.name.endsWith('.py')) {
+            showStatus('Please select a Python (.py) file.', 'error');
+            return;
+        }
+
+        const button = document.querySelector('button');
+        button.classList.add('loading');
+        button.disabled = true;
+        showStatus('Uploading and processing file...', 'info');
 
         const formData = new FormData();
         formData.append('file', file);
@@ -75,332 +128,431 @@
             const uploadData = await uploadResponse.json();
             if (uploadData.error) throw new Error(uploadData.error);
 
+            showStatus('File uploaded successfully. Generating preview...', 'info');
+
             const previewResponse = await fetch('/preview-auto-question', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     path: uploadData.path,
-                    question_type: document.getElementById('question_type').value,
-                    question_level: document.getElementById('question_level').value
+                    question_type: parseInt(document.getElementById('question_type').value),
+                    question_level: parseInt(document.getElementById('question_level').value)
                 })
             });
 
             const data = await previewResponse.json();
             if (data.error) throw new Error(data.error);
 
-            const previewWindow = window.open('', 'Preview', 'width=800,height=600');
+            showStatus('Opening preview window...', 'success');
+            
+            // Enhanced preview window with better error handling
+            const previewWindow = window.open('', 'Preview', 'width=900,height=700,scrollbars=yes');
+            
+            if (!previewWindow) {
+                throw new Error('Failed to open preview window. Please check your popup blocker settings.');
+            }
 
             previewWindow.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>Auto Question Preview</title>
-                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"> 
-                        <style>
-                            body {
-                                font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                                color: #333;
-                                margin: 0;
-                                padding: 20px;
-                            }
-                            
-                            .questionHeader {
-                                display: flex;
-                                justify-content: space-between;
-                                align-items: center;
-                                margin-bottom: 20px;
-                                padding: 0 1rem;
-                                border-bottom: 1px solid #e0e0e0;
-                                padding-bottom: 15px;
-                            }
-                            
-                            .questionType {
-                                font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                                color: #333;
-                                margin: 0;
-                                font-size: 1.2rem;
-                            }
-                            
-                            .questionContent {
-                                margin-bottom: 20px;
-                                font-size: 1.1rem;
-                                line-height: 1.6;
-                                text-align: left;
-                                padding: 0 1rem;
-                                font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                                color: #333;
-                            }
-                            
-                            .optionsContainer {
-                                display: flex;
-                                flex-direction: column;
-                                gap: 12px;
-                                margin-bottom: 20px;
-                                padding: 0 1rem;
-                            }
-                            
-                            .optionLabel {
-                                display: flex;
-                                align-items: flex-start;
-                                padding: 12px 16px;
-                                border: 1px solid #e0e0e0;
-                                border-radius: 6px;
-                                background-color: #ffffff;
-                                transition: all 0.2s ease;
-                            }
-                            
-                            .optionLabel:hover {
-                                border-color: #1859a9;
-                                background-color: #f8f9fa;
-                            }
-                            
-                            .optionContent {
-                                flex: 1;
-                                margin-left: 12px;
-                            }
-                            
-                            .math {
-                                font-size: 1.1em;
-                            }
-                            
-                            /* Reset margins for HTML content */
-                            p, div, span {
-                                margin: 0;
-                                padding: 0;
-                            }
-                            
-                            /* Ensure consistent spacing for lists */
-                            ul, ol {
-                                margin: 0;
-                                padding-left: 20px;
-                            }
-                            
-                            /* Mermaid diagram styling */
-                            .mermaid {
-                                margin: 10px 0;
-                                text-align: center;
-                            }
-                            
-                            /* Chart.js styling */
-                            .chartjs-container {
-                                margin: 10px 0;
-                                text-align: center;
-                            }
-                            
-                            .chartjs-container canvas {
-                                max-width: 400px;
-                                max-height: 300px;
-                            }
-                            
-                            pre {
-                                background-color: #f5f5f5;
-                                padding: 10px;
-                                border-radius: 4px;
-                                overflow-x: auto;
-                                margin: 10px 0;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="questionHeader">
-                            <h2 class="questionType">Multiple Choice Question</h2>
-                        </div>
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Auto Question Preview</title>
+                    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"> 
+                    <style>
+                        body {
+                            font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            color: #333;
+                            margin: 0;
+                            padding: 20px;
+                        }
                         
-                        <div id="question" class="questionContent">
-                            <div id="question-text"></div>
-                            <div id="question-math"></div>
-                            <div id="question-pre"></div>
-                        </div>
+                        .questionHeader {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            margin-bottom: 20px;
+                            padding: 0 1rem;
+                            border-bottom: 1px solid #e0e0e0;
+                            padding-bottom: 15px;
+                        }
                         
-                        <div id="options" class="optionsContainer"></div>
+                        .questionType {
+                             font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            color: #333;
+                            margin: 0;
+                            font-size: 1.2rem;
+                        }
                         
-                        <div style="padding: 0 1rem;">
-                            <p><strong>Correct Answer:</strong> ${data.output.correctAnswer + 1}</p>
-                        </div>
-                    </body>
-                    </html>
-                `);
+                        .questionContent {
+                            margin-bottom: 20px;
+                            font-size: 1.1rem;
+                            line-height: 1.6;
+                            text-align: left;
+                            padding: 0 1rem;
+                            font-family: OpenSans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            color: #333;
+                        }
+                        
+                        .optionsContainer {
+                            display: flex;
+                            flex-direction: column;
+                            gap: 12px;
+                            margin-bottom: 20px;
+                            padding: 0 1rem;
+                        }
+                        
+                        .optionLabel {
+                            display: flex;
+                            align-items: flex-start;
+                            padding: 12px 16px;
+                            border: 1px solid #e0e0e0;
+                            border-radius: 6px;
+                            background-color: #ffffff;
+                            transition: all 0.2s ease;
+                        }
+                        
+                        .optionLabel:hover {
+                            border-color: #1859a9;
+                            background-color: #f8f9fa;
+                        }
+                        
+                        .optionContent {
+                            flex: 1;
+                            margin-left: 12px;
+                        }
+                        
+                        .math {
+                            font-size: 1.1em;
+                        }
+                        
+                        /* Reset margins for HTML content */
+                        p, div, span {
+                            margin: 0;
+                            padding: 0;
+                        }
+                        
+                        /* Ensure consistent spacing for lists */
+                        ul, ol {
+                            margin: 0;
+                            padding-left: 20px;
+                        }
+                        
+                        /* Mermaid diagram styling */
+                        .mermaid {
+                            margin: 10px 0;
+                            text-align: center;
+                        }
+                        
+                        /* Chart.js styling */
+                        .chartjs-container {
+                            margin: 10px 0;
+                            text-align: center;
+                        }
+                        
+                        .chartjs-container canvas {
+                            max-width: 400px;
+                            max-height: 300px;
+                        }
+                        
+                        pre {
+                            background-color: #f5f5f5;
+                            padding: 10px;
+                            border-radius: 4px;
+                            overflow-x: auto;
+                            margin: 10px 0;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="questionHeader">
+                        <h2 class="questionType">Multiple Choice Question</h2>
+                    </div>
+                    
+                    <div class="loading">Loading content...</div>
+                    
+                    <div id="question" class="questionContent" style="display: none;">
+                        <div id="question-text"></div>
+                        <div id="question-math"></div>
+                        <div id="question-pre"></div>
+                    </div>
+                    
+                    <div id="options" class="optionsContainer" style="display: none;"></div>
+                    
+                    <div id="answer" class="answerSection" style="display: none;">
+                        <p><strong>Correct Answer:</strong> Option ${data.output.correctAnswer + 1}</p>
+                    </div>
+                </body>
+                </html>
+            `);
 
-            // Load KaTeX
+            // Enhanced script loading with better error handling
             const katexScript = previewWindow.document.createElement('script');
             katexScript.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js';
+            katexScript.onerror = function() {
+                console.error('Failed to load KaTeX');
+                showLoadingError(previewWindow, 'Failed to load KaTeX library');
+            };
             
             katexScript.onload = function() {
-                // Load Mermaid after KaTeX
-                const mermaidScript = previewWindow.document.createElement('script');
-                mermaidScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
-                mermaidScript.onload = function () {
-                    previewWindow.mermaid.initialize({ startOnLoad: false });
-                    
-                    // Load Chart.js after Mermaid
+                const autoRenderScript = previewWindow.document.createElement('script');
+                autoRenderScript.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js';
+                autoRenderScript.onerror = function() {
+                    console.error('Failed to load KaTeX auto-render');
+                    // Continue without auto-render
+                    loadMermaid();
+                };
+
+                autoRenderScript.onload = function () {
+                    // Initialize auto-render with comprehensive delimiters
+                    try {
+                        previewWindow.renderMathInElement(previewWindow.document.body, {
+                            delimiters: [
+                                { left: "$$", right: "$$", display: true },
+                                { left: "\\(", right: "\\)", display: false },
+                                { left: "\\[", right: "\\]", display: true },
+                                { left: "$", right: "$", display: false }
+                            ],
+                            throwOnError: false,
+                            errorColor: '#cc0000',
+                            strict: false
+                        });
+                    } catch (err) {
+                        console.error('Auto-render error:', err);
+                    }
+                    loadMermaid();
+                };
+
+                function loadMermaid() {
+                    const mermaidScript = previewWindow.document.createElement('script');
+                    mermaidScript.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+                    mermaidScript.onerror = function() {
+                        console.error('Failed to load Mermaid');
+                        loadChartJS();
+                    };
+                    mermaidScript.onload = function () {
+                        try {
+                            previewWindow.mermaid.initialize({ 
+                                startOnLoad: false,
+                                theme: 'default',
+                                securityLevel: 'loose'
+                            });
+                        } catch (err) {
+                            console.error('Mermaid initialization error:', err);
+                        }
+                        loadChartJS();
+                    };
+                    previewWindow.document.head.appendChild(mermaidScript);
+                }
+
+                function loadChartJS() {
                     const chartjsScript = previewWindow.document.createElement('script');
                     chartjsScript.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
+                    chartjsScript.onerror = function() {
+                        console.error('Failed to load Chart.js');
+                        renderContent();
+                    };
                     chartjsScript.onload = function() {
                         renderContent();
                     };
                     previewWindow.document.head.appendChild(chartjsScript);
-                };
-                previewWindow.document.head.appendChild(mermaidScript);
+                }
+
+                previewWindow.document.head.appendChild(autoRenderScript);
             };
+
+            function showLoadingError(window, message) {
+                const loadingDiv = window.document.querySelector('.loading');
+                loadingDiv.innerHTML = `<div class="error">${message}</div>`;
+            }
             
             function renderContent() {
-                // Extract content from question
-                const questionContent = extractContentFromHtml(data.output.question);
-                
-                // Display question text
-                const questionTextDiv = previewWindow.document.getElementById('question-text');
-                questionTextDiv.innerHTML = questionContent.textContent;
-                
-                // Render question math if exists
-                if (questionContent.latexExpressions.length > 0) {
-                    const questionMathDiv = previewWindow.document.getElementById('question-math');
-                    questionContent.latexExpressions.forEach(latex => {
-                        const mathDiv = previewWindow.document.createElement('div');
-                        mathDiv.style.marginTop = '10px';
-                        questionMathDiv.appendChild(mathDiv);
-                        previewWindow.katex.render(latex, mathDiv, { 
-                            displayMode: true, 
-                            throwOnError: false 
-                        });
-                    });
-                }
-                
-                // Render question pre content if exists
-                if (questionContent.preContents.length > 0) {
-                    const questionPreDiv = previewWindow.document.getElementById('question-pre');
-                    questionContent.preContents.forEach(preContent => {
-                        if (preContent.className.includes('mermaid')) {
-                            const mermaidDiv = previewWindow.document.createElement('div');
-                            mermaidDiv.className = 'mermaid';
-                            mermaidDiv.textContent = preContent.textContent;
-                            questionPreDiv.appendChild(mermaidDiv);
-                            
-                            try {
-                                previewWindow.mermaid.run({ nodes: [mermaidDiv] });
-                            } catch (err) {
-                                console.error('Mermaid rendering error:', err);
-                            }
-                        } else if (preContent.className.includes('chartjs')) {
-                            // Handle Chart.js content
-                            const chartContainer = previewWindow.document.createElement('div');
-                            chartContainer.className = 'chartjs-container';
-                            
-                            try {
-                                console.log(preContent.textContent);
-                                const config = JSON.parse(preContent.textContent);
-                                // Add responsive defaults if not specified
-                                if (!config.options) config.options = {};
-                                if (!config.options.responsive) config.options.responsive = true;
-                                if (!config.options.maintainAspectRatio) config.options.maintainAspectRatio = false;
-                                
-                                const canvas = previewWindow.document.createElement('canvas');
-                                chartContainer.appendChild(canvas);
-                                questionPreDiv.appendChild(chartContainer);
-                                
-                                new previewWindow.Chart(canvas.getContext('2d'), config);
-                            } catch (err) {
-                                console.error('Chart.js rendering error:', err);
-                                chartContainer.innerHTML = '<p style="color: red;">Error rendering chart: ' + err.message + '</p>';
-                                questionPreDiv.appendChild(chartContainer);
-                            }
-                        } else {
-                            // For other pre tags, insert as-is
-                            const preDiv = previewWindow.document.createElement('div');
-                            preDiv.innerHTML = preContent.outerHTML;
-                            questionPreDiv.appendChild(preDiv);
-                        }
-                    });
-                }
-                
-                // Process options
-                const optionsContainer = previewWindow.document.getElementById('options');
-                data.output.options.forEach((option, index) => {
-                    const optionContent = extractContentFromHtml(option);
+                try {
+                    // Hide loading message
+                    const loadingDiv = previewWindow.document.querySelector('.loading');
+                    loadingDiv.style.display = 'none';
                     
-                    const optionDiv = previewWindow.document.createElement('div');
-                    optionDiv.className = 'optionLabel';
+                    // Show content containers
+                    previewWindow.document.getElementById('question').style.display = 'block';
+                    previewWindow.document.getElementById('options').style.display = 'block';
+                    previewWindow.document.getElementById('answer').style.display = 'block';
                     
-                    const contentDiv = previewWindow.document.createElement('div');
-                    contentDiv.className = 'optionContent';
+                    // Extract content from question
+                    const questionContent = extractContentFromHtml(data.output.question);
+                    console.log('Question content:', questionContent);
                     
-                    optionDiv.innerHTML = `<strong>${index + 1}.</strong>`;
-                    optionDiv.appendChild(contentDiv);
-                    
-                    // Add text content if exists
-                    if (optionContent.textContent.trim()) {
-                        const textDiv = previewWindow.document.createElement('div');
-                        textDiv.innerHTML = optionContent.textContent;
-                        contentDiv.appendChild(textDiv);
+                    // Display question text
+                    const questionTextDiv = previewWindow.document.getElementById('question-text');
+                    if (questionContent.textContent) {
+                        questionTextDiv.innerHTML = questionContent.textContent;
                     }
                     
-                    // Add math content if exists
-                    if (optionContent.latexExpressions.length > 0) {
-                        optionContent.latexExpressions.forEach(latex => {
+                    // Render question math if exists
+                    if (questionContent.latexExpressions.length > 0) {
+                        const questionMathDiv = previewWindow.document.getElementById('question-math');
+                        questionContent.latexExpressions.forEach((latex, index) => {
                             const mathDiv = previewWindow.document.createElement('div');
-                            mathDiv.style.marginTop = '5px';
-                            contentDiv.appendChild(mathDiv);
-                            previewWindow.katex.render(latex, mathDiv, {
-                                displayMode: true,
-                                throwOnError: false
-                            });
-                        });
-                    }
-                    
-                    // Add pre content if exists
-                    if (optionContent.preContents.length > 0) {
-                        optionContent.preContents.forEach(preContent => {
-                            if (preContent.className.includes('mermaid')) {
-                                const mermaidDiv = previewWindow.document.createElement('div');
-                                mermaidDiv.className = 'mermaid';
-                                mermaidDiv.textContent = preContent.textContent;
-                                contentDiv.appendChild(mermaidDiv);
-                                
-                                try {
-                                    previewWindow.mermaid.run({ nodes: [mermaidDiv] });
-                                } catch (err) {
-                                    console.error('Mermaid rendering error:', err);
-                                }
-                            } else if (preContent.className.includes('chartjs')) {
-                                // Handle Chart.js content in options
-                                const chartContainer = previewWindow.document.createElement('div');
-                                chartContainer.className = 'chartjs-container';
-                                
-                                try {
-                                    const config = JSON.parse(preContent.textContent);
-                                    
-                                    // Add responsive defaults if not specified
-                                    if (!config.options) config.options = {};
-                                    if (!config.options.responsive) config.options.responsive = true;
-                                    if (!config.options.maintainAspectRatio) config.options.maintainAspectRatio = false;
-                                    
-                                    const canvas = previewWindow.document.createElement('canvas');
-                                    chartContainer.appendChild(canvas);
-                                    contentDiv.appendChild(chartContainer);
-                                    
-                                    new previewWindow.Chart(canvas.getContext('2d'), config);
-                                } catch (err) {
-                                    console.error('Chart.js rendering error:', err);
-                                    chartContainer.innerHTML = '<p style="color: red;">Error rendering chart: ' + err.message + '</p>';
-                                    contentDiv.appendChild(chartContainer);
-                                }
-                            } else {
-                                // For other pre tags, insert as-is
-                                const preDiv = previewWindow.document.createElement('div');
-                                preDiv.innerHTML = preContent.outerHTML;
-                                contentDiv.appendChild(preDiv);
+                            mathDiv.className = 'math';
+                            mathDiv.style.marginTop = '10px';
+                            questionMathDiv.appendChild(mathDiv);
+                            
+                            try {
+                                previewWindow.katex.render(latex, mathDiv, { 
+                                    displayMode: true, 
+                                    throwOnError: false,
+                                    errorColor: '#cc0000',
+                                    strict: false
+                                });
+                            } catch (err) {
+                                console.error('KaTeX rendering error for question:', err);
+                                mathDiv.innerHTML = `<span class="error">Math rendering error: ${latex}</span>`;
                             }
                         });
                     }
                     
-                    optionsContainer.appendChild(optionDiv);
+                    // Render question pre content if exists
+                    renderPreContent(questionContent.preContents, previewWindow.document.getElementById('question-pre'));
+                    
+                    // Process options
+                    const optionsContainer = previewWindow.document.getElementById('options');
+                    data.output.options.forEach((option, index) => {
+                        const optionContent = extractContentFromHtml(option);
+                        
+                        const optionDiv = previewWindow.document.createElement('div');
+                        optionDiv.className = 'optionLabel';
+                        if (index === data.output.correctAnswer) {
+                            optionDiv.classList.add('correct');
+                        }
+                        
+                        const numberDiv = previewWindow.document.createElement('div');
+                        numberDiv.className = 'optionNumber';
+                        numberDiv.textContent = `${index + 1}.`;
+                        
+                        const contentDiv = previewWindow.document.createElement('div');
+                        contentDiv.className = 'optionContent';
+                        
+                        optionDiv.appendChild(numberDiv);
+                        optionDiv.appendChild(contentDiv);
+                        
+                        // Add text content if exists
+                        if (optionContent.textContent.trim()) {
+                            const textDiv = previewWindow.document.createElement('div');
+                            textDiv.innerHTML = optionContent.textContent;
+                            contentDiv.appendChild(textDiv);
+                        }
+                        
+                        // Add math content if exists
+                        if (optionContent.latexExpressions.length > 0) {
+                            optionContent.latexExpressions.forEach(latex => {
+                                const mathDiv = previewWindow.document.createElement('div');
+                                mathDiv.className = 'math';
+                                mathDiv.style.marginTop = '5px';
+                                contentDiv.appendChild(mathDiv);
+                                
+                                try {
+                                    previewWindow.katex.render(latex, mathDiv, {
+                                        displayMode: true,
+                                        throwOnError: false,
+                                        errorColor: '#cc0000',
+                                        strict: false
+                                    });
+                                } catch (err) {
+                                    console.error('KaTeX rendering error for option:', err);
+                                    mathDiv.innerHTML = `<span class="error">Math rendering error: ${latex}</span>`;
+                                }
+                            });
+                        }
+                        
+                        // Add pre content if exists
+                        renderPreContent(optionContent.preContents, contentDiv);
+                        
+                        optionsContainer.appendChild(optionDiv);
+                    });
+                    
+                    // Final auto-render pass for any remaining math
+                    if (previewWindow.renderMathInElement) {
+                        try {
+                            previewWindow.renderMathInElement(previewWindow.document.body, {
+                                delimiters: [
+                                    { left: "$$", right: "$$", display: true },
+                                    { left: "\\(", right: "\\)", display: false },
+                                    { left: "\\[", right: "\\]", display: true },
+                                    { left: "$", right: "$", display: false }
+                                ],
+                                throwOnError: false,
+                                errorColor: '#cc0000',
+                                strict: false
+                            });
+                        } catch (err) {
+                            console.error('Final auto-render error:', err);
+                        }
+                    }
+                    
+                } catch (err) {
+                    console.error('Content rendering error:', err);
+                    showLoadingError(previewWindow, 'Error rendering content: ' + err.message);
+                }
+            }
+            
+            function renderPreContent(preContents, container) {
+                preContents.forEach(preContent => {
+                    if (preContent.className.includes('mermaid')) {
+                        const mermaidDiv = previewWindow.document.createElement('div');
+                        mermaidDiv.className = 'mermaid';
+                        mermaidDiv.textContent = preContent.textContent;
+                        container.appendChild(mermaidDiv);
+                        
+                        try {
+                            if (previewWindow.mermaid) {
+                                previewWindow.mermaid.run({ nodes: [mermaidDiv] });
+                            }
+                        } catch (err) {
+                            console.error('Mermaid rendering error:', err);
+                            mermaidDiv.innerHTML = '<div class="error">Mermaid rendering error: ' + err.message + '</div>';
+                        }
+                    } else if (preContent.className.includes('chartjs')) {
+                        const chartContainer = previewWindow.document.createElement('div');
+                        chartContainer.className = 'chartjs-container';
+                        
+                        try {
+                            const config = JSON.parse(preContent.textContent);
+                            
+                            // Add responsive defaults if not specified
+                            if (!config.options) config.options = {};
+                            if (!config.options.responsive) config.options.responsive = true;
+                            if (!config.options.maintainAspectRatio) config.options.maintainAspectRatio = false;
+                            
+                            const canvas = previewWindow.document.createElement('canvas');
+                            chartContainer.appendChild(canvas);
+                            container.appendChild(chartContainer);
+                            
+                            if (previewWindow.Chart) {
+                                new previewWindow.Chart(canvas.getContext('2d'), config);
+                            } else {
+                                throw new Error('Chart.js not loaded');
+                            }
+                        } catch (err) {
+                            console.error('Chart.js rendering error:', err);
+                            chartContainer.innerHTML = '<div class="error">Chart rendering error: ' + err.message + '</div>';
+                            container.appendChild(chartContainer);
+                        }
+                    } else {
+                        // For other pre tags, insert as-is
+                        const preDiv = previewWindow.document.createElement('div');
+                        preDiv.innerHTML = preContent.outerHTML;
+                        container.appendChild(preDiv);
+                    }
                 });
             }
 
             previewWindow.document.head.appendChild(katexScript);
             previewWindow.document.close();
+            
         } catch (err) {
-            console.error(err);
-            alert('Error: ' + err.message);
+            console.error('Upload error:', err);
+            showStatus('Error: ' + err.message, 'error');
+        } finally {
+            button.classList.remove('loading');
+            button.disabled = false;
         }
     }
     </script>

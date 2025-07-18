@@ -1325,34 +1325,11 @@ def format_mathematical_output(result: dict) -> str:
 
 
 def generate_single_katex_html(math_expression: str, is_question: bool = False) -> str:
-    """Generate HTML with KaTeX math and Mermaid ER diagram"""
-    er_diagram = """
-    <pre class="mermaid">
-    erDiagram
-        CUSTOMER ||--o{ ORDER : places
-        CUSTOMER {
-            string name
-            string custNumber
-            string sector
-        }
-        ORDER ||--|{ LINE-ITEM : contains
-        ORDER {
-            int orderNumber
-            string deliveryAddress
-        }
-        LINE-ITEM {
-            string productCode
-            int quantity
-            float pricePerUnit
-        }
-    </pre>
-    """
-
+    """Generate HTML for a single KaTeX expression with no line breaks"""
     instruction = '<p>Expand the below equation:</p>' if is_question else ''
-
-    return "<!DOCTYPE html><html><head><meta charset='UTF-8'><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'><script src='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'></script><script type=\"module\" src=\"https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs\"></script></head><body><p>Expand the below equation:</p>{json.dumps(er_diagram)}<div id='math-output'></div><script>document.addEventListener('DOMContentLoaded',function(){katex.render(`\\sum_{i=1}^{4} (i)`,document.getElementById('math-output'),{displayMode:true,throwOnError:false});});<script>mermaid.initialize({ startOnLoad: true });</script></body></html>"
-
-
+    
+    # Use single quotes for HTML attributes to avoid escaping double quotes
+    return f'''<!DOCTYPE html><html><head><meta charset='UTF-8'><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css'><script src='https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js'></script></head><body>{instruction}<div id='math-output'></div><script>document.addEventListener('DOMContentLoaded',function(){{katex.render(`{math_expression}`,document.getElementById('math-output'),{{displayMode:true,throwOnError:false}});}});</script></body></html>'''
 
 def generate_json_output(result: dict) -> str:
     """Generate JSON output with properly escaped KaTeX expressions"""

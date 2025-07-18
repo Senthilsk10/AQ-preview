@@ -1327,7 +1327,7 @@ def format_mathematical_output(result: dict) -> str:
 
 def generate_single_katex_html(math_expression: str, is_question: bool = False, mermaid_code: str | None = None) -> str:
     """Generate flat/minified HTML with KaTeX and optional Mermaid, suitable for JSON embedding"""
-    instruction = '<p>Expand the below equation:</p>' if is_question else ''
+    instruction = f'<p>Expand the below equation:${math_expression}$</p>' if is_question else ''
     
     mermaid_code = """
     erDiagram
@@ -1351,10 +1351,9 @@ def generate_single_katex_html(math_expression: str, is_question: bool = False, 
     chartjs_json = json.dumps(chartjs_code)
     chartjs_json_escaped = html.escape(chartjs_json)
     
-    katex_script = (
-        f"<div id='math-output'></div>"
-        f"<script>document.addEventListener('DOMContentLoaded',function(){{katex.render(`{math_expression}`,document.getElementById('math-output'),{{displayMode:true,throwOnError:false}});}});</script>"
-    )
+    katex_script  = (
+        f"<div id='math-output'>${math_expression}$</div>"
+    ) if not is_question else ""
 
     mermaid_block = f"<pre class='mermaid'>{mermaid_code}</pre>" if mermaid_code and is_question else ''
     chartjs_block = f"<pre class='chartjs'>{chartjs_json_escaped}</pre>" if chartjs_code and is_question else ''

@@ -59,9 +59,16 @@ def preview_auto_question():
 
             if hasattr(module, 'generate_question'):
                 result = module.generate_question(question_type, question_level)
-                print(result)
+                # print(result)
                 parsed = json.loads(result)
-                print('parsed',parsed)
+                # print('parsed',parsed)
+                print(jsonify({
+                    'output': {
+                        'question': parsed['question'],
+                        'options': parsed['options'],
+                        'correctAnswer': parsed['correctAnswer']
+                    }
+                }).data)
                 return jsonify({
                     'output': {
                         'question': parsed['question'],
