@@ -29,7 +29,7 @@
     function extractContentFromHtml(htmlString) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlString, 'text/html');
-        
+        // console.log('doc',doc) // the html string replaces table from the next step(before text content) only as we checked console log
         // Extract pre tags before removing scripts
         const preTags = doc.querySelectorAll('pre');
         const preContents = Array.from(preTags).map(pre => ({
@@ -46,9 +46,10 @@
         const tempDoc = doc.cloneNode(true);
         const tempPreTags = tempDoc.querySelectorAll('pre');
         tempPreTags.forEach(pre => pre.remove());
+        console.log(tempDoc.body.innerHTML, tempDoc.body.textContent,tempDoc.body.innerText)
         
-        const textContent = tempDoc.body.textContent || tempDoc.body.innerText || '';
-        
+        const textContent = tempDoc.body.innerHTML || tempDoc.body.textContent || tempDoc.body.innerText || '';
+        // console.log('textcontent',textContent);
         // Enhanced LaTeX extraction - handle multiple formats
         const latexMatches = [];
         

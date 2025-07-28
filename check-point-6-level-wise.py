@@ -420,8 +420,8 @@ def generate_level_3_question() -> dict:
         "template_with_data_snippet",
         "template_summary_focus"
     ]
-    # chosen_template = random.choice(templates)
-    chosen_template = 'template_with_data_snippet' # used for specifically tsting the table format..
+    chosen_template = random.choice(templates)
+    # chosen_template = 'template_with_data_snippet' # used for specifically tsting the table format..
     # --- Content Generation ---
     context = random.choice(contexts)
     variable_name, var_type, correct_summary, distractor_summary = random.choice(variables)
@@ -456,8 +456,9 @@ def generate_level_3_question() -> dict:
             var_type = "Categorical"
             correct_summary = "Counts and Frequencies"
             distractor_summary = "Mean and Standard Deviation"
-            snippet = df[['species']].sample(5, random_state=random.randint(1, 100)).to_html(index=False, classes='table table-sm table-striped w-auto mx-auto my-3')
-            data_snippet_html = snippet.replace('<table', '<table style="width: auto; margin: 1em auto; border-collapse: collapse; border: 1px solid #ccc;"')
+            df.insert(0, 'S. No.', range(1, len(df) + 1))
+            snippet = df[['S. No.','species']].sample(5, random_state=random.randint(1, 100)).to_html(index=False, classes='table table-sm table-striped w-auto mx-auto my-3')
+            data_snippet_html = snippet.replace('<table', '<table style="width: auto; margin: 1em auto; padding:2px; border: 1px solid #ccc;"')
         else: # Quantitative
             diabetes = load_diabetes()
             df = pd.DataFrame(data=diabetes.data, columns=diabetes.feature_names)
@@ -467,8 +468,9 @@ def generate_level_3_question() -> dict:
             var_type = "Quantitative"
             correct_summary = "Mean and Median"
             distractor_summary = "Counts and Frequencies"
-            snippet = df[[quant_var]].sample(5, random_state=random.randint(1, 100)).round(2).to_html(index=False, classes='table table-sm table-striped w-auto mx-auto my-3')
-            data_snippet_html = snippet.replace('<table', '<table style="width: auto; margin: 1em auto; border-collapse: collapse; border: 1px solid #ccc;"')
+            df.insert(0, 'S. No.', range(1, len(df) + 1))
+            snippet = df[['S. No.', quant_var]].sample(5, random_state=random.randint(1, 100)).round(2).to_html(index=False, classes='table table-sm table-striped w-auto mx-auto my-3')
+            data_snippet_html = snippet.replace('<table', '<table style="width: auto; margin: 1em auto; padding:2px; border: 1px solid #ccc;"')
 
 
         question_html = f"""
