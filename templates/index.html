@@ -282,6 +282,10 @@
                     <div id="answer" class="answerSection" style="display: none;">
                         <p><strong>Correct Answer:</strong> Option ${data.output.correctAnswer + 1}</p>
                     </div>
+
+                    <div>
+                    <strong>Explanation</strong>${data.output.explanation}
+                    </div>
                 </body>
                 </html>
             `);
@@ -348,14 +352,24 @@
                 function loadChartJS() {
                     const chartjsScript = previewWindow.document.createElement('script');
                     chartjsScript.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';
+                    const boxPlotScript = previewWindow.document.createElement('script');
+                    boxPlotScript.src = 'https://unpkg.com/@sgratzl/chartjs-chart-boxplot@3';
                     chartjsScript.onerror = function() {
                         console.error('Failed to load Chart.js');
                         renderContent();
                     };
                     chartjsScript.onload = function() {
-                        renderContent();
+                        console.log("loaded chartjs");
                     };
+                    boxPlotScript.onerror = ()=>{
+                        console.log("could not load box plot");
+                    }
+                    boxPlotScript.onload = ()=>{
+                        console.log("loaded box plot script");
+                        renderContent();
+                    }
                     previewWindow.document.head.appendChild(chartjsScript);
+                    previewWindow.document.head.appendChild(boxPlotScript);
                 }
 
                 previewWindow.document.head.appendChild(autoRenderScript);
