@@ -142,6 +142,7 @@
             });
 
             const data = await previewResponse.json();
+            console.log(data);
             if (data.error) throw new Error(data.error);
 
             showStatus('Opening preview window...', 'success');
@@ -395,10 +396,15 @@
                     const questionContent = extractContentFromHtml(data.output.question);
                     console.log('Question content:', questionContent);
                     
+                    
                     // Display question text
                     const questionTextDiv = previewWindow.document.getElementById('question-text');
                     if (questionContent.textContent) {
-                        questionTextDiv.innerHTML = questionContent.textContent;
+                        if (questionContent.textContent.includes("\\\\")){
+                            questionTextDiv.innerText = "$$"+questionContent.textContent.replace(/\\\\/g,'\\')+"$$";
+                        }else{
+                            questionTextDiv.innerHTML = questionContent.textContent;
+                        }
                     }
                     
                     // Render question math if exists
@@ -451,7 +457,7 @@
                         // Add text content if exists
                         if (optionContent.textContent.trim()) {
                             const textDiv = previewWindow.document.createElement('div');
-                            textDiv.innerHTML = optionContent.textContent;
+                            textDiv.innerHTML = "$$"+optionContent.textContent+"$$";
                             contentDiv.appendChild(textDiv);
                         }
                         
