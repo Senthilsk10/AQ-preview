@@ -457,7 +457,7 @@
                         // Add text content if exists
                         if (optionContent.textContent.trim()) {
                             const textDiv = previewWindow.document.createElement('div');
-                            textDiv.innerHTML = "$$"+optionContent.textContent+"$$";
+                            textDiv.innerHTML = optionContent.textContent;
                             contentDiv.appendChild(textDiv);
                         }
                         
