@@ -400,11 +400,12 @@
                     // Display question text
                     const questionTextDiv = previewWindow.document.getElementById('question-text');
                     if (questionContent.textContent) {
-                        if (questionContent.textContent.includes("\\\\")){
-                            questionTextDiv.innerText = "$$"+questionContent.textContent.replace(/\\\\/g,'\\')+"$$";
-                        }else{
+                            if(questionContent.textContent.includes('\\\\')){
+                                let data = questionContent.textContent.replaceAll('_',' ');
+                                console.log('data',data);
+                                questionTextDiv.innerText = '$$'+data.replaceAll('\\\\','\\')+'$$';
+                            }
                             questionTextDiv.innerHTML = questionContent.textContent;
-                        }
                     }
                     
                     // Render question math if exists
@@ -415,7 +416,7 @@
                             mathDiv.className = 'math';
                             mathDiv.style.marginTop = '10px';
                             questionMathDiv.appendChild(mathDiv);
-                            
+                            latex = latex.replace("\\\\",'\\');
                             try {
                                 previewWindow.katex.render(latex, mathDiv, { 
                                     displayMode: true, 
